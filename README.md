@@ -12,5 +12,8 @@ In fact there is one value of "k" in which we don't have to - technically - do a
 We shall provide our program with two arguments. First a data file of two letter foodtype names, followed by three integers which are
 the three features of the foodstuff. These values are hard coded for now, though our datafile can have any number of cases / data points ( in this hardcoded case we may refer to them as food points.
 
+## test file
+Our first simple one is fs.dat, there are only 8 cases, this is the number of rows, which we represent by m. n is the number of dimensions. k of course is the number of clusters.
+
 ## data structure
-v\_t is simply for holding all the parameters together in one group.
+v\_t is simply for holding all the above 3 parameters together in one group. 

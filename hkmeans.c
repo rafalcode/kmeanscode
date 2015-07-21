@@ -24,12 +24,12 @@ typedef struct /* vitdats_t, a convenience function, just to bunch the vital det
     size_t m /* total number of cases/foodpoints*/, k /* number of clusters */, n /* number of variables/dimension*/, nl /* name/label length */;
 } vitdats_t;
 
-typedef struct /* c_t */
+typedef struct /* c_t, this represents 1 cluster: we'll have a k-sized array of these */
 {
     char **ns;
-    size_t *nsi; /* the index of the f_t */
-    size_t bu;
-    size_t nsnum;
+    size_t bu; /* buffer, for the number of elements in this cluster */
+    size_t nsnum; /* the actual number of cases in this cluster */
+    size_t *nsi; /* array of size nsnum, containing the absolute index of the f_t case in this cluster */
     float *means;
 } c_t;
 
@@ -39,16 +39,16 @@ typedef struct /* f_t, the struct for a foodtype ...ie. a foodpoint */
     float *nv; /* values for each of the n dimensions */
     float d2l; /* euclidian distance to cluster mean */
     float eil;/* error if lost from its current cluster */
-    size_t l; /* the cluster it's currently associated with */
+    int c; /* the cluster it's currently associated with */
 } f_t; /* food type */
 
 void printclumeans(c_t *b, vitdats_t *vt, size_t changecounter)
 {
-    int i, j2;
+    int i, j;
     printf("Cluster means at changecounter %zu:\n", changecounter); 
     for(i=0;i<vt->k;++i) {
-        for(j2=0;j2<vt->n; ++j2)
-            printf("%f ", b[i].means[j2]);
+        for(j=0;j<vt->n; ++j)
+            printf("%f ", b[i].means[j]);
         printf("\n"); 
     }
 }
@@ -87,10 +87,10 @@ void recalc2means(f_t *cases, c_t *b, vitdats_t *vt, size_t clulostidx, size_t c
     /* now fill in the d2l for each of the affected point */
     cases[affectedpt].d2l = 0.;
     for(j2=0;j2<vt->n; ++j2) {
-        d = cases[affectedpt].nv[j2] - b[cases[affectedpt].l-1].means[j2];
+        d = cases[affectedpt].nv[j2] - b[cases[affectedpt].c-1].means[j2];
         cases[affectedpt].d2l += d*d;
     }
-    cases[affectedpt].eil = (b[cases[affectedpt].l-1].nsnum * cases[affectedpt].d2l) / (b[cases[affectedpt].l-1].nsnum -1);
+    cases[affectedpt].eil = (b[cases[affectedpt].c-1].nsnum * cases[affectedpt].d2l) / (b[cases[affectedpt].c-1].nsnum -1);
 
     return;
 }
@@ -109,10 +109,10 @@ void recalcmeans(f_t *cases, c_t *b, vitdats_t *vt)
     /* now fill in the d2l and eil for each of the m foodpoints */
     for(i=0;i<vt->m;++i) {
         for(j2=0;j2<vt->n; ++j2) {
-            d = cases[i].nv[j2] - b[cases[i].l-1].means[j2];
+            d = cases[i].nv[j2] - b[cases[i].c-1].means[j2];
             cases[i].d2l += d*d;
         }
-        cases[i].eil = (b[cases[i].l-1].nsnum * cases[i].d2l) / (b[cases[i].l-1].nsnum -1);
+        cases[i].eil = (b[cases[i].c-1].nsnum * cases[i].d2l) / (b[cases[i].c-1].nsnum -1);
     }
     return;
 }
@@ -124,7 +124,7 @@ float calctote(f_t *cases, c_t *b, vitdats_t *vt)
     printf("\n"); 
     for(i=0; i<vt->m; ++i) {
         for(j=0; j<vt->n; ++j) {
-            e = cases[i].nv[j] - b[cases[i].l-1].means[j];
+            e = cases[i].nv[j] - b[cases[i].c-1].means[j];
             printf("%f ", e*e);
             tote += e*e;
         }
@@ -146,14 +146,14 @@ f_t *creaf_t(vitdats_t *vt, size_t gbuf)
     return ca;
 }
 
-c_t *creac_t(vitdats_t *vt)
+c_t *creac_t(vitdats_t *vt) /* simply uses k to set up our array of clusters */
 {
     int i, j;
     c_t *c=malloc(vt->k*sizeof(c_t));
     for(i=0;i<vt->k;++i) {
         c[i].bu=GB;
         c[i].nsnum=0;
-        c[i].means=malloc(vt->n*sizeof(float)); /* no need to set to set to zero on creation, recalcmenas will take care of that */
+        c[i].means=malloc(vt->n*sizeof(float)); /* no need to set to set to zero on creation, recalcmeans will take care of that */
         c[i].nsi=malloc(c[i].bu*sizeof(size_t));
         c[i].ns=malloc(c[i].bu*sizeof(char *));
         for(j=0;j<c[i].bu;++j) 
@@ -185,7 +185,7 @@ void freec_t(c_t *c, vitdats_t *vt)
     free(c);
 }
 
-f_t *f2struct(char *fname, vitdats_t *vt)
+f_t *f2struct(char *fname, vitdats_t *vt) /* cheap and unrobust way of rendering input file into f_t struct array */
 {
     FILE *fp = fopen(fname, "r");
     if (fp == NULL ) {
@@ -212,17 +212,20 @@ f_t *f2struct(char *fname, vitdats_t *vt)
     }
     fclose(fp);
     vt->m=i;
-    for(i=vt->m;i<gbuf;++i)  {
+    /* normalisation sequence */
+    for(i=vt->m;i<gbuf;++i) {
         free(fl[i].n);
         free(fl[i].nv);
     }
-    fl=realloc(fl, vt->m*sizeof(f_t)); /* normalize */
+    fl=realloc(fl, vt->m*sizeof(f_t));
     return fl;
 }
 
 void firstgo(f_t *cases, c_t *b, vitdats_t *vt)
 {
     int i, j;
+
+    /* at this early stage we'll add each dimension into a a fp value: obviously inaccurate, but it's a start */
     float *casum=calloc(vt->m, sizeof(float));
     for(j=0;j<vt->n;++j) 
         casum[0] += cases[0].nv[j];
@@ -238,35 +241,35 @@ void firstgo(f_t *cases, c_t *b, vitdats_t *vt)
             min=casum[i];
     }
 
-    float intv=(max-min)/vt->k;
+    float intv=(max-min)/vt->k; /* interval, initially, we just going to group according to rough size */
     for(i=0;i<vt->m;++i)
         for(j=1;j<=vt->k;++j) 
             if(casum[i] <=min+intv*j) {
-                cases[i].l = j;
+                cases[i].c = j;
                 break;
             }
-    /* artificialbecause of Hartigan 1975 error */
-    cases[4].l=3;
+    /* artificial because of Hartigan 1975 error */
+    cases[4].c=3;
 
-    //        cases[i].l= 1+k*(casum[i]-min) / (max-min+1);
+    //        cases[i].c= 1+k*(casum[i]-min) / (max-min+1);
 
     for(i=0;i<vt->m;++i)
-        printf("%s: %f - %zu.\n", cases[i].n, casum[i], cases[i].l);
+        printf("%s: %f - %zu.\n", cases[i].n, casum[i], cases[i].c);
     free(casum);
 
     /*Ok,one by one we going to put each of the points in to their chosencluster */
     for(i=0;i<vt->m;++i) {
-        if(b[cases[i].l-1].nsnum == b[cases[i].l-1].bu) {
-            b[cases[i].l-1].bu += GB;
-            b[cases[i].l-1].nsi = realloc(b[cases[i].l-1].nsi, sizeof(size_t));
-            b[cases[i].l-1].ns = realloc(b[cases[i].l-1].ns, sizeof(char *));
-            for(j=b[cases[i].l-1].bu-GB; j<b[cases[i].l-1].bu; ++j) 
-                b[cases[i].l-1].ns[j] = calloc(vt->nl+1, sizeof(char));
+        if(b[cases[i].c-1].nsnum == b[cases[i].c-1].bu) {
+            b[cases[i].c-1].bu += GB;
+            b[cases[i].c-1].nsi = realloc(b[cases[i].c-1].nsi, sizeof(size_t));
+            b[cases[i].c-1].ns = realloc(b[cases[i].c-1].ns, sizeof(char *));
+            for(j=b[cases[i].c-1].bu-GB; j<b[cases[i].c-1].bu; ++j) 
+                b[cases[i].c-1].ns[j] = calloc(vt->nl+1, sizeof(char));
         }
         /* some mad indices here, you need to immerse yourself to "get" them */
-        strcpy(b[cases[i].l-1].ns[b[cases[i].l-1].nsnum], cases[i].n);
-        b[cases[i].l-1].nsi[b[cases[i].l-1].nsnum] = (size_t)i;
-        b[cases[i].l-1].nsnum++;
+        strcpy(b[cases[i].c-1].ns[b[cases[i].c-1].nsnum], cases[i].n);
+        b[cases[i].c-1].nsi[b[cases[i].c-1].nsnum] = (size_t)i;
+        b[cases[i].c-1].nsnum++;
     }
     return;
 }
@@ -282,7 +285,7 @@ void cyclerun(f_t *cases, c_t *b, vitdats_t *vt, size_t *changecounter, float *t
     size_t chacou = *changecounter;
 
     for(j=0;j<vt->m;++j) {
-        starti = cases[j].l-1; /* this is the cluster the current point belongs to */
+        starti = cases[j].c-1; /* this is the cluster the current point belongs to */
         /* take next cluster fater current one, and give it minerr and mindx */
         printf("pt. %i at %i with %f:", j, starti, cases[j].d2l);
         iopt=(starti+0+1)%vt->k;
@@ -313,10 +316,10 @@ void cyclerun(f_t *cases, c_t *b, vitdats_t *vt, size_t *changecounter, float *t
         }
         printf("\n"); 
         /* OK, is the minerr negative? We should reposition this point then */
-        if( (minerr<0) && (b[cases[j].l-1].nsnum > 1) ) {
+        if( (minerr<0) && (b[cases[j].c-1].nsnum > 1) ) {
             chacou++;
-            oldidx = cases[j].l-1;
-            cases[j].l = mindx+1;
+            oldidx = cases[j].c-1;
+            cases[j].c = mindx+1;
             printf("Clust %i with %zu will lose %s.\n", oldidx, b[oldidx].nsnum, cases[j].n); 
             printf("Clust %i with %zu will gain %s.\n", mindx, b[mindx].nsnum, cases[j].n); 
             /* but is there space for this extra point in this cluster ... check nad if not, make it */
@@ -366,26 +369,26 @@ int main(int argc, char *argv[])
     vt->n=3; /* hard coded, yes I know: this means number of features/dimensions for the data */
     vt->nl=2; /* lengths of the labels: the foods are abbreviated to two letters */
     vt->k=(size_t)atoi(argv[2]); /* number of clusters requested */
-    size_t chacou=0;
+    size_t chacou=0; /* aka. changecounter */
     float tote;
 
     f_t *cases=f2struct(argv[1], vt);
-    printf("%zu cases/foodpoints.\n", vt->m); 
+    printf("File read in, report: %zu cases/foodpoints.\n", vt->m); 
 
-    c_t *b=creac_t(vt); 
+    c_t *cts=creac_t(vt); /* cts, our array of clusters */
 
-    firstgo(cases, b, vt);
-    printclumembs(b, vt);
+    firstgo(cases, cts, vt);
+    printclumembs(cts, vt);
 
-    recalcmeans(cases, b, vt); /* actually you only need calculate the means of the changed clusters. */
-    tote=calctote(cases, b, vt);
+    recalcmeans(cases, cts, vt); /* actually you only need calculate the means of the changed clusters. */
+    tote=calctote(cases, cts, vt);
 
     printf("Initial allocation:\n");
-    printclumeans(b, vt, chacou);
+    printclumeans(cts, vt, chacou);
 
     /* OK, go for the cycleruns */
     for(i=0;i<3;++i) {
-        cyclerun(cases, b, vt, &chacou, &tote);
+        cyclerun(cases, cts, vt, &chacou, &tote);
         printf("Changes occured: %zu\n", chacou);
     }
 
