@@ -254,7 +254,7 @@ void firstgo(f_t *cases, c_t *b, vitdats_t *vt)
     //        cases[i].c= 1+k*(casum[i]-min) / (max-min+1);
 
     for(i=0;i<vt->m;++i)
-        printf("%s: %f - %zu.\n", cases[i].n, casum[i], cases[i].c);
+        printf("%s: %f - %i.\n", cases[i].n, casum[i], cases[i].c);
     free(casum);
 
     /*Ok,one by one we going to put each of the points in to their chosencluster */
@@ -392,16 +392,16 @@ int main(int argc, char *argv[])
         printf("Changes occured: %zu\n", chacou);
     }
 
-    /* now normalize .. */
+    /* now normalize memory .. */
     for(i=0;i<vt->k;++i) {
-        for(j=b[i].nsnum; j<b[i].bu; ++j)
-            free(b[i].ns[j]);
-        b[i].nsi = realloc(b[i].nsi, b[i].nsnum*sizeof(size_t));
-        b[i].means = realloc(b[i].means, b[i].nsnum*sizeof(size_t));
+        for(j=cts[i].nsnum; j<cts[i].bu; ++j)
+            free(cts[i].ns[j]);
+        cts[i].nsi = realloc(cts[i].nsi, cts[i].nsnum*sizeof(size_t));
+        cts[i].means = realloc(cts[i].means, cts[i].nsnum*sizeof(size_t));
     }
 
     freef_t(cases, vt);
-    freec_t(b, vt);
+    freec_t(cts, vt);
     free(vt);
     return 0;
 }
