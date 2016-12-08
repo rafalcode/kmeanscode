@@ -24,5 +24,9 @@ ALway disappointing when iyou come back and it doesn't work. The last-known good
 
 hkmeans was available as a binary,even if hkmeans.c didn't compile properly. However, this binary threa out a segmentation fault, althouugh it does give some output
 
+Wel, then why come back? Well, it's because clustering is so important. If you think about it, it's the antidote to the coninuous plunge into detail that we're constantly faced with. Clustering is an abstraction, whereby we lose data certainly (that's why the error scheme is important) but it  allows us to pull away from ever more dizzying detail.
+
 ## actually only a few simple corrections were required.
 The clusters variable cts, was named to b for some reason, and only partially. Getting rid of that solved the main noncomilation issue. There was also a trivial warning got rid of too.
+
+## Segmentation fault does not occur if k>2. But at k==2, it does occur.

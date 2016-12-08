@@ -221,11 +221,11 @@ f_t *f2struct(char *fname, vitdats_t *vt) /* cheap and unrobust way of rendering
     return fl;
 }
 
-void firstgo(f_t *cases, c_t *b, vitdats_t *vt)
+void firstgo(f_t *cases, c_t *b, vitdats_t *vt) /* the rough first clustering scheme */
 {
     int i, j;
 
-    /* at this early stage we'll add each dimension into a a fp value: obviously inaccurate, but it's a start */
+    /* at this early stage we'll add each dimension into a a fp value: obviously horrendously inaccurate, but it's a start */
     float *casum=calloc(vt->m, sizeof(float));
     for(j=0;j<vt->n;++j) 
         casum[0] += cases[0].nv[j];
@@ -248,16 +248,19 @@ void firstgo(f_t *cases, c_t *b, vitdats_t *vt)
                 cases[i].c = j;
                 break;
             }
-    /* artificial because of Hartigan 1975 error */
-    cases[4].c=3;
+    /* "artificial because of Hartigan 1975 error". I think this was just a trivial error, though I dont explain myself here
+     * but this hard code must specifically refer to the food stuff data set, and how I wa probably trying to get his extact results. */
+    cases[4].c=3; 
 
     //        cases[i].c= 1+k*(casum[i]-min) / (max-min+1);
 
+    printf("Initial clussteralloc: each point, the horrendous amalgam of distance, and the cluster is belogns to 1-indexed.\n"); 
     for(i=0;i<vt->m;++i)
         printf("%s: %f - %i.\n", cases[i].n, casum[i], cases[i].c);
     free(casum);
 
-    /*Ok,one by one we going to put each of the points in to their chosencluster */
+    /*Ok, we cycle through the points and build up the clustersn (variable b)  properly */
+    /* cases[i].c-1 is basically the index of the cluster that a food point belongs to */
     for(i=0;i<vt->m;++i) {
         if(b[cases[i].c-1].nsnum == b[cases[i].c-1].bu) {
             b[cases[i].c-1].bu += GB;
@@ -286,7 +289,7 @@ void cyclerun(f_t *cases, c_t *b, vitdats_t *vt, size_t *changecounter, float *t
 
     for(j=0;j<vt->m;++j) {
         starti = cases[j].c-1; /* this is the cluster the current point belongs to */
-        /* take next cluster fater current one, and give it minerr and mindx */
+        /* take next cluster after current one, and give it minerr and mindx */
         printf("pt. %i at %i with %f:", j, starti, cases[j].d2l);
         iopt=(starti+0+1)%vt->k;
         printf("%i-", iopt); 
