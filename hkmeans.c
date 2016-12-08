@@ -112,6 +112,7 @@ void recalcmeans(f_t *cases, c_t *b, vitdats_t *vt)
             d = cases[i].nv[j2] - b[cases[i].c-1].means[j2];
             cases[i].d2l += d*d;
         }
+        /* the error calc is tricky ... it's soemthing that belongs to the point itself. */
         cases[i].eil = (b[cases[i].c-1].nsnum * cases[i].d2l) / (b[cases[i].c-1].nsnum -1);
     }
     return;
