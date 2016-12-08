@@ -17,7 +17,8 @@
 #include <string.h>
 
 #define GB 4
-#define NSZ 2
+#define NSZ 32 // name size plus
+#define SINGMEMULT 3 // SINGle Member Error MULTiplier. For when there's only one member of a cluster.
 
 typedef struct /* vitdats_t, a convenience function, just to bunch the vital details of the dataset together */
 {
@@ -26,11 +27,11 @@ typedef struct /* vitdats_t, a convenience function, just to bunch the vital det
 
 typedef struct /* c_t, this represents 1 cluster: we'll have a k-sized array of these */
 {
-    char **ns;
+    char **ns; /* array of the names of he members */
     size_t bu; /* buffer, for the number of elements in this cluster */
     size_t nsnum; /* the actual number of cases in this cluster */
     size_t *nsi; /* array of size nsnum, containing the absolute index of the f_t case in this cluster */
-    float *means;
+    float *means; /* an array of size n ... i.e. a mean for each dimension of data */
 } c_t;
 
 typedef struct /* f_t, the struct for a foodtype ...ie. a foodpoint */
@@ -99,10 +100,10 @@ void recalcmeans(f_t *cases, c_t *b, vitdats_t *vt)
 {
     int i, j, j2;
     float d;
-    for(i=0;i<vt->k;++i)
-        for(j2=0;j2<vt->n; ++j2) {
+    for(i=0;i<vt->k;++i) // go through every cluser
+        for(j2=0;j2<vt->n; ++j2) { // go though every dimension
             b[i].means[j2] = 0.0;
-            for(j=0;j<b[i].nsnum;++j)
+            for(j=0;j<b[i].nsnum;++j) // go through every member of the cluster
                 b[i].means[j2] += cases[b[i].nsi[j]].nv[j2];
             b[i].means[j2] /= b[i].nsnum;
         }
@@ -113,7 +114,10 @@ void recalcmeans(f_t *cases, c_t *b, vitdats_t *vt)
             cases[i].d2l += d*d;
         }
         /* the error calc is tricky ... it's soemthing that belongs to the point itself. */
-        cases[i].eil = (b[cases[i].c-1].nsnum * cases[i].d2l) / (b[cases[i].c-1].nsnum -1);
+        if(b[cases[i].c-1].nsnum != 1) 
+            cases[i].eil = (b[cases[i].c-1].nsnum * cases[i].d2l) / (b[cases[i].c-1].nsnum -1);
+        else
+            cases[i].eil = cases[i].d2l * SINGMEMULT;
     }
     return;
 }
@@ -155,7 +159,7 @@ c_t *creac_t(vitdats_t *vt) /* simply uses k to set up our array of clusters */
         c[i].bu=GB;
         c[i].nsnum=0;
         c[i].means=malloc(vt->n*sizeof(float)); /* no need to set to set to zero on creation, recalcmeans will take care of that */
-        c[i].nsi=malloc(c[i].bu*sizeof(size_t));
+        c[i].nsi=malloc(c[i].bu*sizeof(size_t)); // array of indices of members
         c[i].ns=malloc(c[i].bu*sizeof(char *));
         for(j=0;j<c[i].bu;++j) 
             c[i].ns[j]=calloc(vt->nl+1,sizeof(char));
@@ -206,8 +210,8 @@ f_t *f2struct(char *fname, vitdats_t *vt) /* cheap and unrobust way of rendering
             for(j=gbuf-GB;j<gbuf;++j) {
                 fl[j].n=calloc(vt->nl+1, sizeof(char));
                 fl[j].nv=calloc(vt->n, sizeof(float));
-                fl[j].d2l=0.0;
-                fl[j].eil=0.0;
+                fl[j].d2l=9999999.0;
+                fl[j].eil=9999999.0;
             }
         }
     }
@@ -242,16 +246,23 @@ void firstgo(f_t *cases, c_t *b, vitdats_t *vt) /* the rough first clustering sc
             min=casum[i];
     }
 
-    float intv=(max-min)/vt->k; /* interval, initially, we just going to group according to rough size */
-    for(i=0;i<vt->m;++i)
-        for(j=1;j<=vt->k;++j) 
+    float intv=(max-min)/(float)vt->k; /* interval for casum, initially, we just going to group according to rough size */
+    for(i=0;i<vt->m;++i) {
+        cases[i].c = vt->k; // by default assign to last
+        for(j=1;j<=vt->k-1;++j) // into which of the intervals does casum fall?
             if(casum[i] <=min+intv*j) {
                 cases[i].c = j;
                 break;
             }
+    }
+
     /* "artificial because of Hartigan 1975 error". I think this was just a trivial error, though I dont explain myself here
-     * but this hard code must specifically refer to the food stuff data set, and how I wa probably trying to get his extact results. */
-    cases[4].c=3; 
+     * but this hard code must specifically refer to the food stuff data set, and how I wa probably trying to get his extact results.
+     * but this also assumes 3 or more clusters
+    if(vt->n > 4)
+        cases[4].c=3; 
+        In any case, the aim of that line was just to reproduce Hartigan's specific test.
+        */
 
     //        cases[i].c= 1+k*(casum[i]-min) / (max-min+1);
 
@@ -263,7 +274,7 @@ void firstgo(f_t *cases, c_t *b, vitdats_t *vt) /* the rough first clustering sc
     /*Ok, we cycle through the points and build up the clustersn (variable b)  properly */
     /* cases[i].c-1 is basically the index of the cluster that a food point belongs to */
     for(i=0;i<vt->m;++i) {
-        if(b[cases[i].c-1].nsnum == b[cases[i].c-1].bu) {
+        if(b[cases[i].c-1].nsnum == b[cases[i].c-1].bu-1) {
             b[cases[i].c-1].bu += GB;
             b[cases[i].c-1].nsi = realloc(b[cases[i].c-1].nsi, sizeof(size_t));
             b[cases[i].c-1].ns = realloc(b[cases[i].c-1].ns, sizeof(char *));
@@ -371,7 +382,7 @@ int main(int argc, char *argv[])
     int i, j; /* assorted indices */
     vitdats_t *vt=malloc(sizeof(vitdats_t));
     vt->n=3; /* hard coded, yes I know: this means number of features/dimensions for the data */
-    vt->nl=2; /* lengths of the labels: the foods are abbreviated to two letters */
+    vt->nl=NSZ; /* lengths of the labels: the foods are abbreviated to two letters */
     vt->k=(size_t)atoi(argv[2]); /* number of clusters requested */
     size_t chacou=0; /* aka. changecounter */
     float tote;
