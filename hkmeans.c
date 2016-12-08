@@ -276,8 +276,8 @@ void firstgo(f_t *cases, c_t *b, vitdats_t *vt) /* the rough first clustering sc
     for(i=0;i<vt->m;++i) {
         if(b[cases[i].c-1].nsnum == b[cases[i].c-1].bu-1) {
             b[cases[i].c-1].bu += GB;
-            b[cases[i].c-1].nsi = realloc(b[cases[i].c-1].nsi, sizeof(size_t));
-            b[cases[i].c-1].ns = realloc(b[cases[i].c-1].ns, sizeof(char *));
+            b[cases[i].c-1].nsi = realloc(b[cases[i].c-1].nsi, b[cases[i].c-1].bu*sizeof(size_t));
+            b[cases[i].c-1].ns = realloc(b[cases[i].c-1].ns, b[cases[i].c-1].bu*sizeof(char *));
             for(j=b[cases[i].c-1].bu-GB; j<b[cases[i].c-1].bu; ++j) 
                 b[cases[i].c-1].ns[j] = calloc(vt->nl+1, sizeof(char));
         }
